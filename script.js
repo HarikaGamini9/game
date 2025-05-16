@@ -3,7 +3,6 @@ const ctx = canvas.getContext("2d");
 
 const SCREEN_WIDTH = canvas.width;
 const SCREEN_HEIGHT = canvas.height;
-const FPS = 60;
 
 const BUBBLE_RADIUS = 30;
 const BUBBLE_SPACING = 15;
@@ -18,6 +17,15 @@ const BUBBLE_COLORS = [
 ];
 
 const popSound = document.getElementById("popSound");
+const scoreDisplay = document.getElementById("scoreDisplay");
+const stressLevel = document.getElementById("stressLevel");
+const faceDisplay = document.getElementById("faceDisplay");
+
+let bubbles = [];
+let score = 0;
+let comboMultiplier = 1;
+let lastPopTime = 0;
+let regenerating = false;
 
 class Bubble {
   constructor(x, y, color) {
@@ -59,14 +67,14 @@ class Bubble {
   }
 }
 
-let bubbles = [];
-let score = 0;
-let allPopped = false;
-
 function createBubbles() {
   bubbles = [];
   score = 0;
-  allPopped = false;
+  comboMultiplier = 1;
+  lastPopTime = 0;
+  regenerating = false;
+  updateScore();
+  updateStressLevel();
 
   const gridWidth = GRID_COLS * (BUBBLE_RADIUS * 2 + BUBBLE_SPACING) - BUBBLE_SPACING;
   const gridHeight = GRID_ROWS * (BUBBLE_RADIUS * 2 + BUBBLE_SPACING) - BUBBLE_SPACING;
@@ -83,24 +91,92 @@ function createBubbles() {
   }
 }
 
-canvas.addEventListener("click", (e) => {
-  const rect = canvas.getBoundingClientRect();
-  const mouseX = e.clientX - rect.left;
-  const mouseY = e.clientY - rect.top;
+function updateScore() {
+  scoreDisplay.textContent = `Score: ${score}`;
+}
 
-  if (allPopped) {
-    createBubbles();
+function updateStressLevel() {
+  const popped = bubbles.filter(b => b.popped).length;
+  const percentage = 100 - (popped / bubbles.length) * 100;
+  stressLevel.style.width = `${percentage}%`;
+
+  if (percentage <= 30) {
+    faceDisplay.textContent = "😄";
+  } else if (percentage <= 60) {
+    faceDisplay.textContent = "😐";
   } else {
-    for (let i = bubbles.length - 1; i >= 0; i--) {
-      if (bubbles[i].isClicked(mouseX, mouseY)) {
-        bubbles[i].pop();
-        score += 1;
-        break;
+    faceDisplay.textContent = "😰";
+  }
+}
+
+function handlePop(x, y) {
+  for (let i = bubbles.length - 1; i >= 0; i--) {
+    if (bubbles[i].isClicked(x, y)) {
+      const now = Date.now();
+      if (now - lastPopTime < 400) {
+        comboMultiplier++;
+      } else {
+        comboMultiplier = 1;
       }
+      lastPopTime = now;
+
+      bubbles[i].pop();
+      score += 10 * comboMultiplier;
+      updateScore();
+      updateStressLevel();
+      break;
     }
-    if (bubbles.every(b => b.popped)) {
-      allPopped = true;
+  }
+
+  if (!regenerating && bubbles.every(b => b.popped)) {
+    startRegeneration();
+  }
+}
+
+function startRegeneration() {
+  regenerating = true;
+  let index = 0;
+  const poppedBubbles = bubbles.filter(b => b.popped);
+
+  function regenerateNext() {
+    if (index < poppedBubbles.length) {
+      const b = poppedBubbles[index];
+      b.popped = false;
+      b.color = BUBBLE_COLORS[Math.floor(Math.random() * BUBBLE_COLORS.length)];
+
+      // Glow effect
+      const bubbleDiv = document.createElement("div");
+      bubbleDiv.style.position = "absolute";
+      bubbleDiv.style.left = `${b.x - BUBBLE_RADIUS}px`;
+      bubbleDiv.style.top = `${b.y - BUBBLE_RADIUS}px`;
+      bubbleDiv.style.width = `${BUBBLE_RADIUS * 2}px`;
+      bubbleDiv.style.height = `${BUBBLE_RADIUS * 2}px`;
+      bubbleDiv.style.borderRadius = "50%";
+      bubbleDiv.style.zIndex = "2";
+      bubbleDiv.className = "bubble-glow";
+
+      document.body.appendChild(bubbleDiv);
+      setTimeout(() => document.body.removeChild(bubbleDiv), 600);
+
+      index++;
+      updateStressLevel();
+      setTimeout(regenerateNext, 100);
+    } else {
+      regenerating = false;
     }
+  }
+
+  regenerateNext();
+}
+
+// Multi-touch & click support
+canvas.addEventListener("pointerdown", (e) => {
+  const rect = canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+
+  if (!regenerating) {
+    handlePop(x, y);
   }
 });
 
@@ -115,18 +191,6 @@ function draw() {
   ctx.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
 
   bubbles.forEach(b => b.draw(ctx));
-
-  ctx.fillStyle = "black";
-  ctx.font = "24px Arial";
-  ctx.fillText("Score: " + score, 20, 40);
-
-  if (allPopped) {
-    ctx.fillStyle = "black";
-    ctx.font = "24px Arial";
-    ctx.textAlign = "center";
-    ctx.fillText("All Popped! Click or press 'R' to play again", SCREEN_WIDTH / 2, 60);
-    ctx.textAlign = "start";
-  }
 
   requestAnimationFrame(draw);
 }

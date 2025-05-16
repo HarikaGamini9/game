@@ -1,11 +1,18 @@
-body {
+body { 
   margin: 0;
   background-color: #c8dcff;
   display: flex;
   justify-content: center;
   align-items: center;
   height: 100vh;
+  overflow: hidden;
+  /* Remove position: relative if not necessary */
 }
+
 canvas {
   border: 2px solid black;
+  display: block;
+  /* Add margin: auto to ensure centering inside flex */
+  margin: auto;
+  z-index: 1;
 }
